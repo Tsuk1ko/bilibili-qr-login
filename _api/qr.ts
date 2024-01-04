@@ -3,19 +3,39 @@ import { handle } from 'hono/vercel';
 import { streamSSE } from 'hono/streaming';
 import type { StreamingApi } from 'hono/utils/stream';
 
+enum SSEEvent {
+  GENERATE = 'generate',
+  POLL = 'poll',
+}
+
 export const runtime = 'edge';
 
 export const app = new Hono().basePath('/api');
 
 app.get('/qr', c =>
   streamSSE(c, async stream => {
+    // 指定编码
+    c.header('Content-Type', 'text/event-stream; charset=utf-8');
+
     let streamClosed = false;
     handleStreamClose(stream, () => {
       streamClosed = true;
     });
+
+    // 获取登录链接
+    const qr = new LoginQr();
+    await stream.writeSSE({ data: JSON.stringify(await qr.generate()), event: SSEEvent.GENERATE });
+    await stream.sleep(2000);
+
     while (!streamClosed) {
-      // await stream.writeSSE({ data: message, event: 'time-update' });
-      await stream.sleep(1000);
+      console.log('poll', Date.now());
+      const result = await qr.poll();
+      await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
+      if (result.code === 0) {
+        stream.close();
+        break;
+      }
+      await stream.sleep(2000);
     }
   }),
 );
@@ -32,14 +52,6 @@ interface GenerateQrResp {
   };
 }
 
-const generateQr = async () => {
-  const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate');
-  const {
-    data: { url, qrcode_key },
-  } = (await r.json()) as GenerateQrResp;
-  return { url, key: qrcode_key };
-};
-
 interface PollQrResp {
   code: string;
   message: string;
@@ -53,6 +65,44 @@ interface PollQrResp {
   };
 }
 
+interface PollQrResult {
+  code: number;
+  msg: string;
+  cookie?: string;
+}
+
+class LoginQr {
+  private key = '';
+
+  public async generate() {
+    const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate');
+    const {
+      data: { url, qrcode_key: key },
+    } = (await r.json()) as GenerateQrResp;
+    this.key = key;
+    return { url, key };
+  }
+
+  public async poll() {
+    const r0 = await fetch(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.key}`);
+    const { data } = (await r0.json()) as PollQrResp;
+    const result: PollQrResult = {
+      code: data.code,
+      msg: data.message,
+    };
+
+    if (data.code !== 0) return result;
+
+    const cookie = new Cookie(r0.headers.getSetCookie());
+    const r1 = await fetch(data.url);
+
+    cookie.add(r1.headers.getSetCookie());
+    result.cookie = cookie.toString();
+
+    return result;
+  }
+}
+
 class Cookie {
   private cookie = new Map<string, string>();
 
@@ -62,7 +112,8 @@ class Cookie {
 
   public add(cookies: string[]) {
     cookies.forEach(str => {
-      const [name, ...values] = str.split('=');
+      const [nv] = str.split(';');
+      const [name, ...values] = nv.split('=');
       this.cookie.set(name, values.join('='));
     });
   }
@@ -73,32 +124,6 @@ class Cookie {
       .join('; ');
   }
 }
-
-const pollQr = async (key: string) => {
-  const r0 = await fetch(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${key}`);
-  const { data } = (await r0.json()) as PollQrResp;
-
-  if (data.code !== 0) {
-    return {
-      code: data.code,
-      message: data.message,
-      cookie: '',
-    };
-  }
-
-  const cookie = new Cookie(r0.headers.getSetCookie());
-  console.log('cookie1', cookie.toString());
-  const r1 = await fetch(data.url, { headers: { cookie: cookie.toString() } });
-
-  cookie.add(r1.headers.getSetCookie());
-  console.log('cookie2', cookie.toString());
-
-  return {
-    code: data.code,
-    message: data.message,
-    cookie: cookie.toString(),
-  };
-};
 
 const handleStreamClose = (stream: StreamingApi, onClose: () => any) => {
   const close = stream.close.bind(stream);
