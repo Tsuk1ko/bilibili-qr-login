@@ -27,7 +27,7 @@ app.get('/qr', c =>
     await stream.writeSSE({ data: JSON.stringify(await qr.generate()), event: SSEEvent.GENERATE });
     await stream.sleep(2000);
 
-    while (!streamClosed) {
+    for (let i = 0; i < 30 && !streamClosed; i++) {
       console.log('poll', Date.now());
       const result = await qr.poll();
       await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
@@ -75,7 +75,7 @@ class LoginQr {
   private key = '';
 
   public async generate() {
-    const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate');
+    const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-fe-header');
     const {
       data: { url, qrcode_key: key },
     } = (await r.json()) as GenerateQrResp;
@@ -84,7 +84,9 @@ class LoginQr {
   }
 
   public async poll() {
-    const r0 = await fetch(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.key}`);
+    const r0 = await fetch(
+      `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.key}&source=main-fe-header`,
+    );
     const { data } = (await r0.json()) as PollQrResp;
     const result: PollQrResult = {
       code: data.code,
