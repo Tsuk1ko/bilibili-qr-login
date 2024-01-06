@@ -23,6 +23,9 @@ module.exports = {
     '@typescript-eslint/ban-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/ban-ts-comment': 'off',
+    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/explicit-member-accessibility': 'warn',
+    '@typescript-eslint/member-ordering': 'warn',
     '@typescript-eslint/consistent-type-imports': [
       'error',
       {

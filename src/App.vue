@@ -1,5 +1,5 @@
 <template>
-  <div class="text-center">
+  <div class="text-center no-select">
     <h2>哔哩哔哩 cookie 获取工具</h2>
     <p>
       使用手机 APP 扫码登录后即可获取 cookie (<a
@@ -10,89 +10,37 @@
       >)
     </p>
   </div>
-  <div class="qrcode flex">
-    <QrCode :value="qrValue" :options="qrCodeOption" />
-    <div v-if="qrStatus !== QrStatus.WAIT" class="qrcode__mask flex">
-      <CheckIcon v-if="qrStatus === QrStatus.SCANNED || qrStatus === QrStatus.SUCCESS" />
-      <RefreshBtn v-else />
+  <div class="qrcode flex no-select">
+    <QrCode v-if="state.url" :value="state.url" :options="qrCodeOption" />
+    <div v-if="state.status !== QrStatus.WAIT" class="qrcode__mask flex">
+      <CheckIcon v-if="state.status === QrStatus.SCANNED || state.status === QrStatus.SUCCESS" />
+      <RefreshBtn v-else @click="restart" />
     </div>
   </div>
-  <div class="text-center">
-    <p>{{ qrStatusText }}</p>
+  <div class="text-center no-select">
+    <p>{{ getters.statusText }}</p>
+  </div>
+  <div class="cookie-box">
+    <CookieDisplay v-if="state.cookie" :value="state.cookie" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
 import QrCode from '@chenfengyuan/vue-qrcode';
 import RefreshBtn from './components/RefreshBtn.vue';
+import CookieDisplay from './components/CookieDisplay.vue';
 import CheckIcon from './assets/icons/check_circle.svg';
+import { useQrSSE, QrStatus } from './utils/qrSSE';
 import type { QRCodeRenderersOptions } from 'qrcode';
-
-enum QrStatus {
-  WAIT,
-  SCANNED,
-  EXPIRED,
-  SUCCESS,
-  ERROR,
-}
 
 const qrCodeOption: QRCodeRenderersOptions = {
   margin: 0,
 };
 
-const qrValue = ref(
-  'https://passport.bilibili.com/h5-app/passport/login/scan?navhide=1&qrcode_key=ed99a307afd9a309098071fb9d9258a7&from=main-fe-header',
-);
-const qrErrorMsg = ref('');
-const qrStatus = ref(QrStatus.EXPIRED);
-const qrStatusText = computed(() => {
-  if (qrErrorMsg.value) return qrErrorMsg.value;
-
-  switch (qrStatus.value) {
-    case QrStatus.WAIT:
-      return '等待扫码';
-    case QrStatus.SCANNED:
-      return '已扫码，等待登录';
-    case QrStatus.EXPIRED:
-      return '二维码已过期，请刷新';
-  }
-
-  return '';
-});
+const { state, getters, restart } = useQrSSE();
 </script>
 
-<style lang="less">
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-}
-
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: auto;
-}
-
-body,
-#app,
-.flex {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.link {
-  color: rgb(0, 0, 238);
-  text-decoration: none;
-}
-
+<style scoped lang="less">
 .qrcode {
   position: relative;
   min-width: 196px;
@@ -106,5 +54,9 @@ body,
     left: 0;
     background-color: rgba(255, 255, 255, 0.85);
   }
+}
+
+.cookie-box {
+  min-height: 180px;
 }
 </style>

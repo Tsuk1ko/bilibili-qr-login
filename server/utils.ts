@@ -16,7 +16,7 @@ export const startApiServer = async () => {
   nodemon({
     script: 'server/index.ts',
     ext: 'ts',
-    watch: ['_api'],
+    watch: ['_api', 'server'],
     execMap: {
       ts: 'tsx',
     },

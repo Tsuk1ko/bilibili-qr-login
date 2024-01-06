@@ -1,0 +1,65 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: auto;
+}
+
+body,
+#app,
+.flex {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-row {
+  flex-direction: row;
+}
+
+#app {
+  margin: 0 16px;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.no-select {
+  user-select: none;
+}
+
+.link {
+  color: rgb(0, 0, 238);
+  text-decoration: none;
+}
+
+.btn {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+
+  &::after {
+    position: absolute;
+    content: '';
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    transition: background-color 0.1s;
+  }
+
+  &:hover::after {
+    background-color: rgba(0, 0, 0, 0.08);
+  }
+
+  &:active::after {
+    background-color: rgba(0, 0, 0, 0.12);
+  }
+}

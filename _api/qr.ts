@@ -6,15 +6,35 @@ import type { StreamingApi } from 'hono/utils/stream';
 enum SSEEvent {
   GENERATE = 'generate',
   POLL = 'poll',
+  END = 'end',
 }
+
+enum PollQrResultCode {
+  SUCCESS = 0,
+  EXPIRED = 86038,
+  NOT_CONFIRMED = 86090,
+  NOT_SCANNED = 86101,
+}
+
+const keepPollQrResultCode = new Set([PollQrResultCode.NOT_CONFIRMED, PollQrResultCode.NOT_SCANNED]);
 
 export const runtime = 'edge';
 
 export const app = new Hono().basePath('/api');
 
-app.get('/qr', c =>
-  streamSSE(c, async stream => {
-    // 指定编码
+app.get('/qr', c => {
+  if (process.env.NODE_ENV !== 'development') {
+    try {
+      const referer = c.req.header('Referer');
+      if (!referer || new URL(referer).origin !== new URL(c.req.url).origin) {
+        return c.text('', 403);
+      }
+    } catch {
+      return c.text('', 403);
+    }
+  }
+  return streamSSE(c, async stream => {
+    // 编码加上 charset
     c.header('Content-Type', 'text/event-stream; charset=utf-8');
 
     let streamClosed = false;
@@ -22,28 +42,45 @@ app.get('/qr', c =>
       streamClosed = true;
     });
 
-    // 获取登录链接
-    const qr = new LoginQr();
-    await stream.writeSSE({ data: JSON.stringify(await qr.generate()), event: SSEEvent.GENERATE });
-    await stream.sleep(2000);
+    // 断线重连时的 key
+    const lastEventID = c.req.header('Last-Event-ID');
 
-    for (let i = 0; i < 30 && !streamClosed; i++) {
-      console.log('poll', Date.now());
-      const result = await qr.poll();
-      await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
-      if (result.code === 0) {
-        stream.close();
-        break;
+    // 获取登录链接
+    const qr = new LoginQr(c.req.header('User-Agent'), lastEventID);
+    if (!lastEventID) {
+      const genRes = await qr.generate();
+      console.log('generate', Date.now());
+      await stream.writeSSE({ data: JSON.stringify(genRes), event: SSEEvent.GENERATE, id: genRes.key });
+      if (genRes.code !== 0) {
+        await stream.writeSSE({ data: '', event: SSEEvent.END });
+        await stream.close();
+        return;
       }
       await stream.sleep(2000);
     }
-  }),
-);
+
+    // 轮询
+    for (let i = 0; i < 100 && !streamClosed; i++) {
+      console.log('poll', i, Date.now());
+      const result = await qr.poll();
+      await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
+      if (!keepPollQrResultCode.has(result.code)) {
+        await stream.writeSSE({ data: '', event: SSEEvent.END });
+        await stream.close();
+        return;
+      }
+      await stream.sleep(2000);
+    }
+
+    await stream.writeSSE({ data: '超时终止', event: SSEEvent.END });
+    await stream.close();
+  });
+});
 
 export const GET = handle(app);
 
 interface GenerateQrResp {
-  code: string;
+  code: number;
   message: string;
   ttl: number;
   data: {
@@ -53,7 +90,7 @@ interface GenerateQrResp {
 }
 
 interface PollQrResp {
-  code: string;
+  code: number;
   message: string;
   ttl: number;
   data: {
@@ -72,34 +109,56 @@ interface PollQrResult {
 }
 
 class LoginQr {
-  private key = '';
+  private readonly header: Record<string, string | undefined> = {};
+
+  public constructor(
+    userAgent?: string,
+    private key = '',
+  ) {
+    this.header = {
+      'User-Agent': userAgent,
+      Origin: 'https://www.bilibili.com',
+      Referer: 'https://www.bilibili.com/',
+    };
+  }
 
   public async generate() {
-    const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-fe-header');
+    const r = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate?source=main-fe-header', {
+      headers: this.header,
+    });
     const {
-      data: { url, qrcode_key: key },
+      code,
+      message,
+      data: { url, qrcode_key: key } = { url: '', qrcode_key: '' },
     } = (await r.json()) as GenerateQrResp;
     this.key = key;
-    return { url, key };
+    return { code, msg: message, url, key };
   }
 
   public async poll() {
     const r0 = await fetch(
       `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${this.key}&source=main-fe-header`,
+      { headers: this.header },
     );
-    const { data } = (await r0.json()) as PollQrResp;
-    const result: PollQrResult = {
-      code: data.code,
-      msg: data.message,
-    };
+    const { code, message, data } = (await r0.json()) as PollQrResp;
+    const result: PollQrResult =
+      code === 0
+        ? {
+            code: data.code,
+            msg: data.message,
+          }
+        : {
+            code: Number(code),
+            msg: message,
+          };
 
-    if (data.code !== 0) return result;
+    if (result.code !== 0) return result;
 
     const cookie = new Cookie(r0.headers.getSetCookie());
     const r1 = await fetch(data.url);
 
     cookie.add(r1.headers.getSetCookie());
-    result.cookie = cookie.toString();
+    result.cookie = cookie.del('i-wanna-go-back').toString();
 
     return result;
   }
@@ -118,6 +177,12 @@ class Cookie {
       const [name, ...values] = nv.split('=');
       this.cookie.set(name, values.join('='));
     });
+    return this;
+  }
+
+  public del(name: string) {
+    this.cookie.delete(name);
+    return this;
   }
 
   public toString() {
