@@ -1,9 +1,10 @@
 import { createServer } from 'net';
 import nodemon from 'nodemon';
+import type { Server } from 'net';
 
 const checkPortInUse = (port = 3000) =>
   new Promise<boolean>(resolve => {
-    const tester = createServer()
+    const tester: Server = createServer()
       .once('error', (err: any) => {
         resolve(err.code === 'EADDRINUSE');
       })
@@ -14,9 +15,9 @@ const checkPortInUse = (port = 3000) =>
 export const startApiServer = async () => {
   if (await checkPortInUse()) return;
   nodemon({
-    script: 'server/index.ts',
+    script: 'server/dev.ts',
     ext: 'ts',
-    watch: ['_api', 'server'],
+    watch: ['server'],
     execMap: {
       ts: 'tsx',
     },

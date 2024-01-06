@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
 import { streamSSE } from 'hono/streaming';
 import type { StreamingApi } from 'hono/utils/stream';
 
@@ -18,11 +17,9 @@ enum PollQrResultCode {
 
 const keepPollQrResultCode = new Set([PollQrResultCode.NOT_CONFIRMED, PollQrResultCode.NOT_SCANNED]);
 
-export const runtime = 'edge';
+export const app = new Hono();
 
-export const app = new Hono().basePath('/api');
-
-app.get('/qr', c => {
+app.get('/api/qr', c => {
   if (process.env.NODE_ENV !== 'development') {
     try {
       const referer = c.req.header('Referer');
@@ -49,7 +46,7 @@ app.get('/qr', c => {
     const qr = new LoginQr(c.req.header('User-Agent'), lastEventID);
     if (!lastEventID) {
       const genRes = await qr.generate();
-      console.log('generate', Date.now());
+      console.log(Date.now(), 'generate');
       await stream.writeSSE({ data: JSON.stringify(genRes), event: SSEEvent.GENERATE, id: genRes.key });
       if (genRes.code !== 0) {
         await stream.writeSSE({ data: '', event: SSEEvent.END });
@@ -61,7 +58,7 @@ app.get('/qr', c => {
 
     // 轮询
     for (let i = 0; i < 100 && !streamClosed; i++) {
-      console.log('poll', i, Date.now());
+      console.log(Date.now(), 'poll', i);
       const result = await qr.poll();
       await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
       if (!keepPollQrResultCode.has(result.code)) {
@@ -76,8 +73,6 @@ app.get('/qr', c => {
     await stream.close();
   });
 });
-
-export const GET = handle(app);
 
 interface GenerateQrResp {
   code: number;
@@ -109,10 +104,10 @@ interface PollQrResult {
 }
 
 class LoginQr {
-  private readonly header: Record<string, string | undefined> = {};
+  private readonly header: Record<string, string> = {};
 
   public constructor(
-    userAgent?: string,
+    userAgent = '',
     private key = '',
   ) {
     this.header = {
