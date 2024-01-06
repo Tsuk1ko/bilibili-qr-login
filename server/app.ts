@@ -22,8 +22,9 @@ export const app = new Hono();
 app.get('/api/qr', c => {
   if (process.env.NODE_ENV !== 'development') {
     try {
+      const host = c.req.header('Host');
       const referer = c.req.header('Referer');
-      if (!referer || new URL(referer).origin !== new URL(c.req.url).origin) {
+      if (!referer || new URL(referer).host !== host) {
         return c.text('', 403);
       }
     } catch {
