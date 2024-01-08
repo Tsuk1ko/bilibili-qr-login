@@ -27,6 +27,7 @@ enum PollQrResultCode {
 }
 
 export enum QrStatus {
+  LOADING,
   WAIT,
   SCANNED,
   EXPIRED,
@@ -45,7 +46,7 @@ const defaultState = (): QrState => ({
   url: '',
   cookie: '',
   errMsg: '',
-  status: QrStatus.WAIT,
+  status: QrStatus.LOADING,
 });
 
 class QrSSE {
@@ -135,6 +136,8 @@ export const useQrSSE = () => {
   const getters = reactive({
     statusText: computed(() => {
       switch (state.status) {
+        case QrStatus.LOADING:
+          return '加载中';
         case QrStatus.WAIT:
           return '等待扫码';
         case QrStatus.SCANNED:
@@ -151,5 +154,10 @@ export const useQrSSE = () => {
 
   const qrSSE = new QrSSE(state);
 
-  return { state, getters, restart: qrSSE.restart.bind(qrSSE) };
+  return {
+    state,
+    getters,
+    restart: qrSSE.restart.bind(qrSSE),
+    stop: qrSSE.stop.bind(qrSSE),
+  };
 };

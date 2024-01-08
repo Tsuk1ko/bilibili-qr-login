@@ -13,7 +13,8 @@
   <div class="qrcode flex no-select">
     <QrCode v-if="state.url" :value="state.url" :options="qrCodeOption" />
     <div v-if="state.status !== QrStatus.WAIT" class="qrcode__mask flex">
-      <CheckIcon v-if="state.status === QrStatus.SCANNED || state.status === QrStatus.SUCCESS" />
+      <LoadingIcon v-if="state.status === QrStatus.LOADING" />
+      <CheckIcon v-else-if="state.status === QrStatus.SCANNED || state.status === QrStatus.SUCCESS" />
       <RefreshBtn v-else @click="restart" />
     </div>
   </div>
@@ -29,6 +30,7 @@
 import QrCode from '@chenfengyuan/vue-qrcode';
 import RefreshBtn from './components/RefreshBtn.vue';
 import CookieDisplay from './components/CookieDisplay.vue';
+import LoadingIcon from './components/LoadingIcon.vue';
 import CheckIcon from './assets/icons/check_circle.svg';
 import { useQrSSE, QrStatus } from './utils/qrSSE';
 import type { QRCodeRenderersOptions } from 'qrcode';
@@ -37,7 +39,14 @@ const qrCodeOption: QRCodeRenderersOptions = {
   margin: 0,
 };
 
-const { state, getters, restart } = useQrSSE();
+const { state, getters, restart, stop } = useQrSSE();
+
+// 开发热重载时关闭上次的 SSE
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    stop();
+  });
+}
 </script>
 
 <style scoped lang="less">
