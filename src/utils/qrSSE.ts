@@ -1,4 +1,5 @@
 import { computed, reactive } from 'vue';
+import { postQrMessage } from './postMessage';
 
 enum SSEEvent {
   GENERATE = 'generate',
@@ -123,6 +124,7 @@ class QrSSE {
       case PollQrResultCode.SUCCESS:
         this.state.status = QrStatus.SUCCESS;
         this.state.cookie = cookie!;
+        postQrMessage({ type: 'success', data: cookie! });
         break;
       default:
         this.handleError(msg);

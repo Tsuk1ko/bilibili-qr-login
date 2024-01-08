@@ -4,7 +4,7 @@ import svgLoader from 'vite-svg-loader';
 import { startApiServer } from './server/utils';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   if (command === 'serve') startApiServer();
   return {
     plugins: [vue(), svgLoader()],
@@ -15,6 +15,9 @@ export default defineConfig(({ command }) => {
     },
     build: {
       outDir: 'dist/static',
+    },
+    define: {
+      __TRUST_ORIGIN__: JSON.stringify(process.env.TRUST_ORIGIN || (mode === 'development' ? '*' : '')),
     },
   };
 });
