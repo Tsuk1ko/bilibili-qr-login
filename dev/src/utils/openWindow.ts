@@ -29,7 +29,7 @@ export const openQrWindow = (url: string) => {
     height,
     location: false,
     menubar: false,
-    resizeable: false,
+    resizable: false,
     scrollbars: false,
     status: false,
     toolbar: false,
