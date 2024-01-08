@@ -14,11 +14,7 @@ export const postQrMessage = (data: Omit<QrMessage, 'mode'>) => {
     console.error('No target window');
     return;
   }
-  const origin = targetWindow.location.origin;
-  if (!TRUST_ALL_ORIGIN && !trustOrigins.has(origin)) {
-    console.warn('Untrusted origin:', origin);
-    return;
-  }
   const message: QrMessage = { ...data, mode: PARAM_MODE };
-  targetWindow.postMessage(message, origin);
+  if (TRUST_ALL_ORIGIN) targetWindow.postMessage(message, '*');
+  else trustOrigins.forEach(origin => targetWindow.postMessage(message, origin));
 };
