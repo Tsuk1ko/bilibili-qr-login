@@ -14,8 +14,10 @@
     <QrCode v-if="state.url" :value="state.url" :options="qrCodeOption" />
     <div v-if="state.status !== QrStatus.WAIT" class="qrcode__mask flex">
       <LoadingIcon v-if="state.status === QrStatus.LOADING" />
-      <CheckIcon v-else-if="state.status === QrStatus.SCANNED || state.status === QrStatus.SUCCESS" />
-      <RefreshBtn v-else @click="restart" />
+      <template v-else>
+        <CheckIcon v-if="showCheckIcon" class="icon--no-size" />
+        <RefreshBtn class="icon--no-size" :class="{ 'icon--hide': showCheckIcon }" @click="restart" />
+      </template>
     </div>
   </div>
   <div class="text-center no-select">
@@ -28,7 +30,7 @@
 
 <script setup lang="ts">
 import QrCode from '@chenfengyuan/vue-qrcode';
-import { onBeforeUnmount } from 'vue';
+import { computed, onBeforeUnmount } from 'vue';
 import RefreshBtn from './components/RefreshBtn.vue';
 import CookieDisplay from './components/CookieDisplay.vue';
 import LoadingIcon from './components/LoadingIcon.vue';
@@ -44,6 +46,8 @@ const qrCodeOption: QRCodeRenderersOptions = {
 };
 
 const { state, getters, restart, stop } = useQrSSE();
+
+const showCheckIcon = computed(() => state.status === QrStatus.SCANNED || state.status === QrStatus.SUCCESS);
 
 onBeforeUnmount(stop);
 </script>
@@ -66,5 +70,21 @@ onBeforeUnmount(stop);
 
 .cookie-box {
   min-height: 180px;
+}
+
+.icon {
+  &--no-size {
+    margin: -16px;
+  }
+  &--hide {
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+}
+
+.qrcode:hover {
+  .icon--hide {
+    opacity: 1;
+  }
 }
 </style>

@@ -58,7 +58,8 @@ class QrSSE {
   }
 
   public restart() {
-    Object.assign(this.state, defaultState());
+    const { url } = this.state;
+    Object.assign(this.state, defaultState(), { url });
     this.start();
   }
 
@@ -95,7 +96,7 @@ class QrSSE {
   };
 
   private handleError(msg: string) {
-    this.state.errMsg = msg;
+    this.state.errMsg = msg || '发生错误';
     this.state.status = QrStatus.ERROR;
     return;
   }
