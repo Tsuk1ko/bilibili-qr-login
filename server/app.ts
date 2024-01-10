@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import type { StreamingApi } from 'hono/utils/stream';
 
 enum SSEEvent {
   GENERATE = 'generate',
@@ -19,6 +18,8 @@ const keepPollQrResultCode = new Set([PollQrResultCode.NOT_CONFIRMED, PollQrResu
 
 export const app = new Hono();
 
+let globalId = 0;
+
 app.get('/api/qr', c => {
   if (process.env.NODE_ENV !== 'development') {
     try {
@@ -35,39 +36,47 @@ app.get('/api/qr', c => {
     // 编码加上 charset
     c.header('Content-Type', 'text/event-stream; charset=utf-8');
 
+    const id = globalId++;
     let streamClosed = false;
-    handleStreamClose(stream, () => {
+    stream.onAbort(() => {
       streamClosed = true;
+      console.log(id, 'closed');
     });
 
     // 断线重连时的 key
     const lastEventID = c.req.header('Last-Event-ID');
 
-    // 获取登录链接
-    const qr = new LoginQr(c.req.header('User-Agent'), lastEventID);
-    if (!lastEventID) {
-      const genRes = await qr.generate();
-      console.log(Date.now(), 'generate');
-      await stream.writeSSE({ data: JSON.stringify(genRes), event: SSEEvent.GENERATE, id: genRes.key });
-      if (genRes.code !== 0) {
-        await stream.writeSSE({ data: '', event: SSEEvent.END });
-        await stream.close();
-        return;
+    try {
+      // 获取登录链接
+      const qr = new LoginQr(c.req.header('User-Agent'), lastEventID);
+      if (!lastEventID) {
+        const genRes = await qr.generate();
+        console.log(id, 'generate');
+        await stream.writeSSE({ data: JSON.stringify(genRes), event: SSEEvent.GENERATE, id: genRes.key });
+        if (genRes.code !== 0) {
+          await stream.writeSSE({ data: '', event: SSEEvent.END });
+          await stream.close();
+          return;
+        }
+        await stream.sleep(2000);
       }
-      await stream.sleep(2000);
-    }
 
-    // 轮询
-    for (let i = 0; i < 100 && !streamClosed; i++) {
-      console.log(Date.now(), 'poll', i);
-      const result = await qr.poll();
-      await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
-      if (!keepPollQrResultCode.has(result.code)) {
-        await stream.writeSSE({ data: '', event: SSEEvent.END });
-        await stream.close();
-        return;
+      // 轮询
+      for (let i = 0; i < 100 && !streamClosed; i++) {
+        console.log(id, 'poll', i);
+        const result = await qr.poll();
+        await stream.writeSSE({ data: JSON.stringify(result), event: SSEEvent.POLL });
+        if (!keepPollQrResultCode.has(result.code)) {
+          await stream.writeSSE({ data: '', event: SSEEvent.END });
+          await stream.close();
+          return;
+        }
+        await stream.sleep(2000);
       }
-      await stream.sleep(2000);
+    } catch (error) {
+      await stream.writeSSE({ data: String(error), event: SSEEvent.END });
+      await stream.close();
+      return;
     }
 
     await stream.writeSSE({ data: '超时终止', event: SSEEvent.END });
@@ -187,14 +196,3 @@ class Cookie {
       .join('; ');
   }
 }
-
-const handleStreamClose = (stream: StreamingApi, onClose: () => any) => {
-  const close = stream.close.bind(stream);
-  stream.close = async () => {
-    try {
-      await onClose();
-    } finally {
-      await close();
-    }
-  };
-};
