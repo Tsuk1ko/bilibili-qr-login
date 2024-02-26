@@ -159,13 +159,16 @@ class LoginQr {
 
     if (result.code !== 0) return result;
 
-    const cookie = new Cookie(r0.headers.getSetCookie());
-    const r1 = await fetch(data.url);
-
-    cookie.add(r1.headers.getSetCookie());
+    const cookie = await this.getBasicCookie();
+    cookie.add(r0.headers.getSetCookie());
     result.cookie = cookie.del('i-wanna-go-back').toString();
 
     return result;
+  }
+
+  private async getBasicCookie() {
+    const r = await fetch('https://www.bilibili.com/', { method: 'HEAD' });
+    return new Cookie(r.headers.getSetCookie());
   }
 }
 
