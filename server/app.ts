@@ -159,16 +159,20 @@ class LoginQr {
 
     if (result.code !== 0) return result;
 
-    const cookie = await this.getBasicCookie();
-    cookie.add(r0.headers.getSetCookie());
-    result.cookie = cookie.del('i-wanna-go-back').toString();
+    result.cookie = new Cookie()
+      .set('buvid3', await this.getBuvid3())
+      .add(r0.headers.getSetCookie())
+      .del('i-wanna-go-back')
+      .toString();
 
     return result;
   }
 
-  private async getBasicCookie() {
-    const r = await fetch('https://www.bilibili.com/', { method: 'HEAD' });
-    return new Cookie(r.headers.getSetCookie());
+  private async getBuvid3() {
+    const r = await fetch('https://api.bilibili.com/x/frontend/finger/spi', { headers: this.header });
+    const { code, message, data } = await r.json();
+    if (code !== 0) throw new Error(message);
+    return data.b_3;
   }
 }
 
@@ -177,6 +181,11 @@ class Cookie {
 
   public constructor(cookies?: string[]) {
     if (cookies) this.add(cookies);
+  }
+
+  public set(name: string, value: string) {
+    this.cookie.set(name, value);
+    return this;
   }
 
   public add(cookies: string[]) {
