@@ -16,6 +16,11 @@ enum PollQrResultCode {
 
 const keepPollQrResultCode = new Set([PollQrResultCode.NOT_CONFIRMED, PollQrResultCode.NOT_SCANNED]);
 
+const trustOrigins = (process.env.TRUST_ORIGIN || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
 export const app = new Hono();
 
 let globalId = 0;
@@ -25,7 +30,11 @@ app.get('/api/qr', c => {
     try {
       const host = c.req.header('Host');
       const referer = c.req.header('Referer');
-      if (!referer || new URL(referer).host !== host) {
+      if (!referer) {
+        return c.text('', 403);
+      }
+      const refererUrl = new URL(referer);
+      if (refererUrl.host !== host && !trustOrigins.includes(refererUrl.origin)) {
         return c.text('', 403);
       }
     } catch {

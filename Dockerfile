@@ -1,4 +1,4 @@
-FROM node:24-alpine as build
+FROM node:24-alpine AS build
 
 ARG TRUST_ORIGIN
 
@@ -11,6 +11,9 @@ RUN  yarn --frozen-lockfile \
 
 
 FROM node:24-alpine
+
+ARG TRUST_ORIGIN
+ENV TRUST_ORIGIN=$TRUST_ORIGIN
 
 WORKDIR /app
 
